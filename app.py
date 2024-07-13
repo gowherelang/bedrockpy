@@ -75,8 +75,12 @@ def process_product(product_name, product_description):
             elif 'explosive' in line.lower():
                 explosive = 'True' if 'true' in line.lower() else 'False'
         
-    except (json.JSONDecodeError, KeyError):
-        pass
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"JSON or KeyError: {e}")
+        raise e
+    except Exception as e:
+        print(f"Exception in process_product: {e}")
+        raise e
     
     return dimensions, perishable, explosive
 
@@ -111,6 +115,7 @@ def process_file():
         
         return jsonify(results), 200
     except Exception as e:
+        print(f"Error in process_file: {e}")  # Log the error
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
