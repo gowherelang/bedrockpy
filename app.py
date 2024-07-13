@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import json
 import boto3
 import pandas as pd
@@ -6,6 +7,7 @@ import requests
 from io import BytesIO
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 @app.route('/')
 def hello_world():
