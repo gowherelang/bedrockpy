@@ -5,6 +5,11 @@ import boto3
 import pandas as pd
 import requests
 from io import BytesIO
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -14,7 +19,12 @@ def hello_world():
     return 'Hello, World!'
 
 # Initialize Bedrock client with the specified region
-bedrock = boto3.client('bedrock-runtime', region_name='us-west-2')
+bedrock = boto3.client(
+    'bedrock-runtime',
+    region_name='us-west-2',
+    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+)
 
 def process_product(product_name, product_description):
     prompt_data = (
@@ -79,6 +89,10 @@ def process_file():
         file_data = response.content
 
         df = pd.read_excel(BytesIO(file_data), engine='openpyxl')  # Specify the engine
+        
+        # Log the columns and the first few rows of the DataFrame for debugging
+        print(f"DataFrame Columns: {df.columns}")
+        print(f"DataFrame Head: {df.head()}")
 
         results = []
         for index, row in df.iterrows():
