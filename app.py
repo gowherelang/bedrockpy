@@ -18,12 +18,13 @@ CORS(app)  # Enable CORS for all routes
 def hello_world():
     return 'Hello, World!'
 
-# Initialize Bedrock client with the specified region
+# Initialize Bedrock client with the specified region and credentials
 bedrock = boto3.client(
     'bedrock-runtime',
     region_name='us-west-2',
     aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+    aws_session_token=os.getenv('AWS_SESSION_TOKEN')  # Add session token
 )
 
 def process_product(product_name, product_description):
