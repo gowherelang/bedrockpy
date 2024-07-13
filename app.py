@@ -11,8 +11,8 @@ app = Flask(__name__)
 def hello_world():
     return 'Hello, World!'
 
-# Initialize Bedrock client
-bedrock = boto3.client('bedrock-runtime')
+# Initialize Bedrock client with the specified region
+bedrock = boto3.client('bedrock-runtime', region_name='us-west-2')
 
 def process_product(product_name, product_description):
     prompt_data = (
