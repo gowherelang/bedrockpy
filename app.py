@@ -7,6 +7,10 @@ from io import BytesIO
 
 app = Flask(__name__)
 
+@app.route('/')
+def hello_world():
+    return 'Hello, World!'
+
 # Initialize Bedrock client
 bedrock = boto3.client('bedrock-runtime')
 
