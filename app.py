@@ -78,7 +78,7 @@ def process_file():
         response = requests.get(file_url)
         file_data = response.content
 
-        df = pd.read_excel(BytesIO(file_data))
+        df = pd.read_excel(BytesIO(file_data), engine='openpyxl')  # Specify the engine
 
         results = []
         for index, row in df.iterrows():
