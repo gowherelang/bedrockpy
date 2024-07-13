@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # Import CORS
+from flask_cors import CORS
 import json
 import boto3
 import pandas as pd
@@ -32,7 +32,7 @@ config = Config(
 # Initialize Bedrock client with the specified region and credentials
 bedrock = boto3.client(
     'bedrock-runtime',
-    region_name=os.getenv('AWS_REGION'),
+    region_name='us-west-2',
     aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
     aws_session_token=os.getenv('AWS_SESSION_TOKEN'),  # Add session token
@@ -40,6 +40,7 @@ bedrock = boto3.client(
 )
 
 def process_product(product_name, product_description):
+    print("Processing product:", product_name)
     prompt_data = (
         f"Provide product details for '{product_name}' in the following JSON format:\n"
         "{\n"
@@ -63,6 +64,7 @@ def process_product(product_name, product_description):
     body = json.dumps(payload)
     model_id = "amazon.titan-text-express-v1"
     
+    print("Invoking model...")
     try:
         response = bedrock.invoke_model(
             body=body,
@@ -70,7 +72,7 @@ def process_product(product_name, product_description):
             accept="application/json",
             contentType="application/json",
         )
-        
+        print("Model invoked successfully!")
         response_text = response['body'].read().decode('utf-8')
         response_json = json.loads(response_text)
         
