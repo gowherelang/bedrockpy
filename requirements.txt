@@ -22,3 +22,4 @@ urllib3==2.2.2
 Werkzeug==3.0.3
 boto3
 flask-cors
+python-dotenv
