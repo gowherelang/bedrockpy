@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS  # Import CORS
 import json
 import boto3
 import pandas as pd
@@ -7,6 +7,7 @@ import requests
 from io import BytesIO
 from dotenv import load_dotenv
 import os
+from botocore.config import Config
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,13 +19,24 @@ CORS(app)  # Enable CORS for all routes
 def hello_world():
     return 'Hello, World!'
 
+# Set the configuration for the boto3 client
+config = Config(
+    retries={
+        'max_attempts': 10,
+        'mode': 'standard'
+    },
+    connect_timeout=60,
+    read_timeout=60
+)
+
 # Initialize Bedrock client with the specified region and credentials
 bedrock = boto3.client(
     'bedrock-runtime',
-    region_name='us-west-2',
+    region_name=os.getenv('AWS_REGION'),
     aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-    aws_session_token=os.getenv('AWS_SESSION_TOKEN')  # Add session token
+    aws_session_token=os.getenv('AWS_SESSION_TOKEN'),  # Add session token
+    config=config  # Add the custom configuration
 )
 
 def process_product(product_name, product_description):
