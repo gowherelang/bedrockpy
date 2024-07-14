@@ -134,6 +134,42 @@ def process_file():
         return jsonify({'error': str(e)}), 500
     
     
+# generate image route
+@app.route('/generate', methods=['POST'])
+def generate_image():
+    data = request.get_json()
+    products = data['products']
+    print("Products from POST request:", products)
+    # Create a prompt for the GenAI model
+    prompt = "Generate an image of an air cargo setup with the following parcels:\n\n"
+    for product in products:
+        prompt += f"Product: {product['Product Name']}\n"
+        prompt += f"Dimensions: {product['Dimensions']}\n"
+        prompt += f"Perishable: {product['Perishable']}\n"
+        prompt += f"Explosive: {product['Explosive']}\n"
+        prompt += "\n"
+    prompt += "The image should show the parcels arranged in the air cargo with their dimensions accurately represented."
+
+    print("Prompt:", prompt)
+    try:   
+        print("Invoking model... generating image")
+        # Call AWS Bedrock image generator model
+        response = bedrock.invoke_model(
+            modelId='amazon.titan-image-generator-v1',
+            body=json.dumps({'inputText': prompt}),
+            accept='application/json',
+            contentType='application/json'
+        )
+        print("Model invoked successfully image returning!")
+        response_text = response['body'].read().decode('utf-8')
+        response_json = json.loads(response_text)
+        image_url = response_json['image_url']  # Adjust this based on actual response
+
+        return jsonify({"image_url": image_url})
+
+    except (boto3.exceptions.Boto3Error, Exception) as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
