@@ -201,8 +201,8 @@ def generate_image_endpoint():
         prompt += f"Product: {product['Product Name']}\n"
         prompt += f"Description: {product['Product Description']}\n"
         prompt += f"Dimensions: {product['Dimensions']}\n"
-        prompt += f"Perishable: {product['Perishable']}\n"
-        prompt += f"Explosive: {product['Explosive']}\n"
+        # prompt += f"Perishable: {product['Perishable']}\n"
+        # prompt += f"Explosive: {product['Explosive']}\n"
         prompt += "\n"
     prompt += "The image should show the parcels arranged in the air cargo with their dimensions accurately represented."
 
