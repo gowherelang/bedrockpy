@@ -204,7 +204,7 @@ def generate_image_endpoint():
         # prompt += f"Perishable: {product['Perishable']}\n"
         # prompt += f"Explosive: {product['Explosive']}\n"
         prompt += "\n"
-        prompt+="The image should show the parcels arranged in the cargo area of an airplane. Each parcel should be represented as a distinct, labeled box with accurate dimensions. The arrangement should illustrate how the parcels fit within the cargo space, similar to a 3D model used for cargo planning in logistics. The visualization should resemble the structured layout shown in the example images, highlighting the efficient use of space within the cargo hold."
+        prompt+="Show the parcels arranged in the cargo area of an airplane as distinct, labeled boxes with accurate dimensions, similar to a 3D model used for cargo planning"
 
     print("Prompt:", prompt)
     try:
