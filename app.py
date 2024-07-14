@@ -2,22 +2,31 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
 import boto3
+import base64
+import io
+from PIL import Image
+from botocore.config import Config
+from botocore.exceptions import ClientError
 import pandas as pd
 import requests
-from io import BytesIO
 from dotenv import load_dotenv
 import os
-from botocore.config import Config
+from io import BytesIO
+
+class ImageError(Exception):
+    "Custom exception for errors returned by Amazon Titan Image Generator G1"
+
+    def __init__(self, message):
+        self.message = message
 
 # Load environment variables from .env file
+from dotenv import load_dotenv
+import os
+
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
-
-@app.route('/')
-def hello_world():
-    return 'Hello, World!'
 
 # Set the configuration for the boto3 client
 config = Config(
@@ -39,12 +48,18 @@ bedrock = boto3.client(
     config=config  # Add the custom configuration
 )
 
+
+@app.route('/')
+def hello_world():
+    return 'Hello, World!'
+
 def process_product(product_name, product_description):
     print("Processing product:", product_name)
     prompt_data = (
         f"Provide product details for '{product_name}' in the following JSON format:\n"
         "{\n"
         f"    \"Product Name\": \"{product_name}\",\n"
+        f"    \"Product Description\": \"{product_description}\",\n"
         f"    \"Dimensions\": <width> x <height> x <length>,\n"
         f"    \"Perishable\": \"<True/False>\",\n"
         f"    \"Explosive\": \"<True/False>\"\n"
@@ -134,16 +149,57 @@ def process_file():
         return jsonify({'error': str(e)}), 500
     
     
-# generate image route
+
+def generate_image(prompt):
+    model_id = 'amazon.titan-image-generator-v1'
+
+    body = json.dumps({
+        "taskType": "TEXT_IMAGE",
+        "textToImageParams": {
+            "text": prompt
+        },
+        "imageGenerationConfig": {
+            "numberOfImages": 1,
+            "height": 1024,
+            "width": 1024,
+            "cfgScale": 8.0,
+            "seed": 0
+        }
+    })
+
+    try:
+        response = bedrock.invoke_model(
+            body=body, modelId=model_id, accept="application/json", contentType="application/json"
+        )
+        response_body = json.loads(response.get("body").read())
+        base64_image = response_body.get("images")[0]
+        base64_bytes = base64_image.encode('ascii')
+        image_bytes = base64.b64decode(base64_bytes)
+
+        finish_reason = response_body.get("error")
+        if finish_reason is not None:
+            raise ImageError(f"Image generation error. Error is {finish_reason}")
+
+        return image_bytes
+
+    except ClientError as err:
+        message = err.response["Error"]["Message"]
+        print(f"A client error occurred: {message}")
+        raise
+    except ImageError as err:
+        print(err.message)
+        raise
+
 @app.route('/generate', methods=['POST'])
-def generate_image():
+def generate_image_endpoint():
     data = request.get_json()
     products = data['products']
     print("Products from POST request:", products)
-    # Create a prompt for the GenAI model
+
     prompt = "Generate an image of an air cargo setup with the following parcels:\n\n"
     for product in products:
         prompt += f"Product: {product['Product Name']}\n"
+        prompt += f"Description: {product['Product Description']}\n"
         prompt += f"Dimensions: {product['Dimensions']}\n"
         prompt += f"Perishable: {product['Perishable']}\n"
         prompt += f"Explosive: {product['Explosive']}\n"
@@ -151,25 +207,14 @@ def generate_image():
     prompt += "The image should show the parcels arranged in the air cargo with their dimensions accurately represented."
 
     print("Prompt:", prompt)
-    try:   
-        print("Invoking model... generating image")
-        # Call AWS Bedrock image generator model
-        response = bedrock.invoke_model(
-            modelId='amazon.titan-image-generator-v1',
-            body=json.dumps({'inputText': prompt}),
-            accept='application/json',
-            contentType='application/json'
-        )
-        print("Model invoked successfully image returning!")
-        response_text = response['body'].read().decode('utf-8')
-        response_json = json.loads(response_text)
-        image_url = response_json['image_url']  # Adjust this based on actual response
-
+    try:
+        image_bytes = generate_image(prompt)
+        image = Image.open(io.BytesIO(image_bytes))
+        image_url = "data:image/png;base64," + base64.b64encode(image_bytes).decode('utf-8')
         return jsonify({"image_url": image_url})
 
-    except (boto3.exceptions.Boto3Error, Exception) as e:
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
