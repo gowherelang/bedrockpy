@@ -24,4 +24,3 @@ boto3
 flask-cors
 python-dotenv
 Pillow
-matplotlib
