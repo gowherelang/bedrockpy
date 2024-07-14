@@ -2,16 +2,16 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
 import boto3
-import base64
-import io
-from PIL import Image
-from botocore.config import Config
-from botocore.exceptions import ClientError
 import pandas as pd
 import requests
+from io import BytesIO
 from dotenv import load_dotenv
 import os
-from io import BytesIO
+from botocore.config import Config
+import base64
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from PIL import Image
 
 class ImageError(Exception):
     "Custom exception for errors returned by Amazon Titan Image Generator G1"
@@ -20,13 +20,14 @@ class ImageError(Exception):
         self.message = message
 
 # Load environment variables from .env file
-from dotenv import load_dotenv
-import os
-
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+@app.route('/')
+def hello_world():
+    return 'Hello, World!'
 
 # Set the configuration for the boto3 client
 config = Config(
@@ -47,11 +48,6 @@ bedrock = boto3.client(
     aws_session_token=os.getenv('AWS_SESSION_TOKEN'),  # Add session token
     config=config  # Add the custom configuration
 )
-
-
-@app.route('/')
-def hello_world():
-    return 'Hello, World!'
 
 def process_product(product_name, product_description):
     print("Processing product:", product_name)
@@ -148,72 +144,96 @@ def process_file():
         print(f"Error in process_file: {e}")  # Log the error
         return jsonify({'error': str(e)}), 500
     
-    
+# Function to create a 3D box
+def create_box(ax, origin, size, color='b'):
+    x, y, z = origin
+    dx, dy, dz = size
+    xx = [x, x, x+dx, x+dx, x]
+    yy = [y, y+dy, y+dy, y, y]
+    kwargs = {'alpha': 0.8, 'color': color}
+    ax.plot3D(xx, yy, [z]*5, **kwargs)
+    ax.plot3D(xx, yy, [z+dz]*5, **kwargs)
+    ax.plot3D([x, x], [y, y], [z, z+dz], **kwargs)
+    ax.plot3D([x+dx, x+dx], [y, y], [z, z+dz], **kwargs)
+    ax.plot3D([x, x], [y+dy, y+dy], [z, z+dz], **kwargs)
+    ax.plot3D([x+dx, x+dx], [y+dy, y+dy], [z, z+dz], **kwargs)
 
-def generate_image(prompt):
-    model_id = 'amazon.titan-image-generator-v1'
+def generate_matplotlib_image(products):
+    # Setup 3D plot
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
 
-    body = json.dumps({
-        "taskType": "TEXT_IMAGE",
-        "textToImageParams": {
-            "text": prompt
-        },
-        "imageGenerationConfig": {
-            "numberOfImages": 1,
-            "height": 1024,
-            "width": 1024,
-            "cfgScale": 8.0,
-            "seed": 0
-        }
-    })
+    # Plot each product as a box
+    origin = [0, 0, 0]
+    for product in products:
+        dimensions_str = product["Dimensions"].replace(" inches", "")
+        dimensions = list(map(int, dimensions_str.split(' x ')))
+        create_box(ax, origin, dimensions, color='b')
+        origin[0] += dimensions[0] + 1  # Move to the next position
 
-    try:
-        response = bedrock.invoke_model(
-            body=body, modelId=model_id, accept="application/json", contentType="application/json"
-        )
-        response_body = json.loads(response.get("body").read())
-        base64_image = response_body.get("images")[0]
-        base64_bytes = base64_image.encode('ascii')
-        image_bytes = base64.b64decode(base64_bytes)
-
-        finish_reason = response_body.get("error")
-        if finish_reason is not None:
-            raise ImageError(f"Image generation error. Error is {finish_reason}")
-
-        return image_bytes
-
-    except ClientError as err:
-        message = err.response["Error"]["Message"]
-        print(f"A client error occurred: {message}")
-        raise
-    except ImageError as err:
-        print(err.message)
-        raise
+    # Save plot to BytesIO
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    img_str = base64.b64encode(buffer.read()).decode('utf-8')
+    plt.close(fig)
+    return img_str
 
 @app.route('/generate', methods=['POST'])
-def generate_image_endpoint():
+def generate_image():
     data = request.get_json()
     products = data['products']
     print("Products from POST request:", products)
 
+    # Create a concise prompt for the GenAI model
     prompt = "Generate an image of an air cargo setup with the following parcels:\n\n"
     for product in products:
         prompt += f"Product: {product['Product Name']}\n"
-        prompt += f"Description: {product['Product Description']}\n"
         prompt += f"Dimensions: {product['Dimensions']}\n"
-        # prompt += f"Perishable: {product['Perishable']}\n"
-        # prompt += f"Explosive: {product['Explosive']}\n"
         prompt += "\n"
-        prompt+="Show the parcels arranged in the cargo area of an airplane as distinct, labeled boxes with accurate dimensions, similar to a 3D model used for cargo planning"
+    prompt += (
+        "Show the parcels arranged in the cargo area of an airplane as distinct, labeled boxes with accurate dimensions, similar to a 3D model used for cargo planning."
+    )
+
+    if len(prompt) > 512:
+        return jsonify({"error": "Generated prompt is too long. Please reduce the number of products or simplify descriptions."}), 400
 
     print("Prompt:", prompt)
     try:
-        image_bytes = generate_image(prompt)
-        image = Image.open(io.BytesIO(image_bytes))
-        image_url = "data:image/png;base64," + base64.b64encode(image_bytes).decode('utf-8')
-        return jsonify({"image_url": image_url})
+        print("Invoking model... generating image")
+        # Call AWS Bedrock image generator model
+        response = bedrock.invoke_model(
+            modelId='amazon.titan-image-generator-v1',
+            body=json.dumps({
+                "taskType": "TEXT_IMAGE",
+                "textToImageParams": {
+                    "text": prompt
+                },
+                "imageGenerationConfig": {
+                    "numberOfImages": 1,
+                    "height": 1024,
+                    "width": 1024,
+                    "cfgScale": 8.0,
+                    "seed": 0
+                }
+            }),
+            accept='application/json',
+            contentType='application/json'
+        )
+        print("Model invoked successfully, image returning!")
+        response_text = response['body'].read().decode('utf-8')
+        response_json = json.loads(response_text)
+        model_image_url = response_json['images'][0]  # Adjust this based on actual response
 
-    except Exception as e:
+        # Generate Matplotlib image
+        matplotlib_image = generate_matplotlib_image(products)
+
+        return jsonify({"model_image_url": model_image_url, "matplotlib_image": matplotlib_image})
+
+    except (boto3.exceptions.Boto3Error, Exception) as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
