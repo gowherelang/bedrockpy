@@ -122,6 +122,7 @@ def process_file():
             
             results.append({
                 'Product Name': product_name,
+                'Product Description': product_description,
                 'Dimensions': dimensions,
                 'Perishable': perishable,
                 'Explosive': explosive
@@ -131,6 +132,8 @@ def process_file():
     except Exception as e:
         print(f"Error in process_file: {e}")  # Log the error
         return jsonify({'error': str(e)}), 500
+    
+    
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
